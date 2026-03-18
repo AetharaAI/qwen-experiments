@@ -20,6 +20,7 @@ class ExperimentConfig:
     instruct: str
     output_dir: Path
     log_dir: Path
+    default_voices: list[str]
 
     @classmethod
     def from_env(cls, env_file: str | None = None) -> "ExperimentConfig":
@@ -54,4 +55,12 @@ class ExperimentConfig:
             instruct=os.getenv("QWEN_EXPERIMENT_INSTRUCT", ""),
             output_dir=output_dir,
             log_dir=log_dir,
+            default_voices=[
+                voice.strip()
+                for voice in os.getenv(
+                    "QWEN_EXPERIMENT_DEFAULT_VOICES",
+                    "Ryan,Aiden,Uncle_Fu,Serena,Vivian,Sohee",
+                ).split(",")
+                if voice.strip()
+            ],
         )
