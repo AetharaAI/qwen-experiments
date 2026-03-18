@@ -12,6 +12,11 @@ from .native_customvoice import NativeCustomVoiceRunner
 app = typer.Typer(no_args_is_help=True)
 
 
+@app.callback()
+def main() -> None:
+    """Qwen experiment CLI root."""
+
+
 @app.command("native-customvoice")
 def native_customvoice(
     text: str = typer.Option(..., help="Text to synthesize."),
