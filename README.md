@@ -9,6 +9,8 @@ Current purpose:
 - validate `Qwen3-TTS-12Hz-1.7B-CustomVoice`
 - validate `Qwen3-TTS-12Hz-1.7B-Base`
 - compare runner strategies before integrating anything into `Aether-Voice-X`
+- generate reusable brand, site, telephony, and ad asset packs
+- expose a modular HTTP provider boundary for the production stack
 
 Ground rules:
 
@@ -37,6 +39,26 @@ The answer must come from runtime truth:
 - GPU behavior
 
 The main repo stays clean until one runner clearly wins.
+
+## Current outputs
+
+The native prompt-pack runner writes:
+
+- `structured/` voice and category folders for reusable assets
+- `review/` flat copies for fast listening in VLC or Audacity
+- `review/review.m3u` playlist for one-pass review
+- `manifest.json` so every output stays tied to voice, prompt, and model truth
+
+## Provider boundary
+
+The experiment repo also contains the first modular Qwen provider container surface:
+
+- HTTP contract doc: `docs/QWEN_PROVIDER_API_CONTRACT_2026-03-18.md`
+- FastAPI app: `src/qwen_experiments/provider_server.py`
+- container build: `Dockerfile`
+- shared network compose: `docker-compose.yml`
+
+This lets `Aether-Voice-X` call Qwen over a shared Docker network instead of embedding runner logic directly.
 
 ## Environment
 

@@ -5,6 +5,7 @@ description = "Stream-first runner bakeoff for Qwen TTS outside the main Aether 
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "fastapi>=0.115.12",
   "httpx>=0.28.1",
   "orjson>=3.10.18",
   "pydantic>=2.11.3",
@@ -12,6 +13,7 @@ dependencies = [
   "soundfile>=0.13.1",
   "tenacity>=9.1.2",
   "typer>=0.16.1",
+  "uvicorn>=0.34.0",
   "websockets>=15.0.1",
 ]
 

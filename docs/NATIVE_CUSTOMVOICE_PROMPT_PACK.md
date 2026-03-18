@@ -2,7 +2,7 @@
 
 ## Intent
 
-This command runs a fixed telephony-style prompt pack across a selected set of built-in Qwen voices.
+This command runs a reusable asset pack across a selected set of built-in Qwen voices.
 
 The default voice set is:
 
@@ -13,13 +13,12 @@ The default voice set is:
 - `Vivian`
 - `Sohee`
 
-The default prompt pack is:
+The default prompt pack is grouped as reusable assets:
 
-- `Thanks for calling Aether.`
-- `Thanks for calling Aether Pro.`
-- `Welcome to Aether Voice. How can I help you today?`
-- `I can help with scheduling, support, billing, and general questions.`
-- `Please hold for just a moment while I pull up your account.`
+- `brand`
+- `site`
+- `telephony`
+- `ads`
 
 ## Command
 
@@ -42,8 +41,9 @@ The command writes a timestamped directory under:
 
 Inside that directory:
 
-- one folder per voice
-- one WAV per prompt
+- `structured/` grouped by voice and category
+- `review/` with flat filenames for VLC or Audacity
+- `review/review.m3u` playlist file
 - `manifest.json` summarizing the run
 
 Logs are written separately into:

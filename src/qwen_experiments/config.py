@@ -21,6 +21,13 @@ class ExperimentConfig:
     output_dir: Path
     log_dir: Path
     default_voices: list[str]
+    provider_host: str
+    provider_port: int
+    provider_public_base_url: str
+    provider_model_alias: str
+    provider_default_language: str
+    provider_default_response_format: str
+    provider_timeout_seconds: float
 
     @classmethod
     def from_env(cls, env_file: str | None = None) -> "ExperimentConfig":
@@ -63,4 +70,11 @@ class ExperimentConfig:
                 ).split(",")
                 if voice.strip()
             ],
+            provider_host=os.getenv("QWEN_PROVIDER_HOST", "0.0.0.0"),
+            provider_port=int(os.getenv("QWEN_PROVIDER_PORT", "8072")),
+            provider_public_base_url=os.getenv("QWEN_PROVIDER_PUBLIC_BASE_URL", "http://qwen-provider:8072"),
+            provider_model_alias=os.getenv("QWEN_PROVIDER_MODEL_ALIAS", "qwen_customvoice"),
+            provider_default_language=os.getenv("QWEN_PROVIDER_DEFAULT_LANGUAGE", "English"),
+            provider_default_response_format=os.getenv("QWEN_PROVIDER_DEFAULT_RESPONSE_FORMAT", "wav"),
+            provider_timeout_seconds=float(os.getenv("QWEN_PROVIDER_TIMEOUT_SECONDS", "180")),
         )

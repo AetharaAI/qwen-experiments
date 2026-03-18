@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -25,7 +26,11 @@ def run_native_customvoice_pack(
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     run_name = output_subdir or f"pack-{timestamp}"
     run_dir = config.output_dir / run_name
-    run_dir.mkdir(parents=True, exist_ok=True)
+    structured_dir = run_dir / "structured"
+    review_dir = run_dir / "review"
+    structured_dir.mkdir(parents=True, exist_ok=True)
+    review_dir.mkdir(parents=True, exist_ok=True)
+    playlist_path = review_dir / "review.m3u"
 
     logger.emit(
         "pack_run_started",
@@ -41,8 +46,9 @@ def run_native_customvoice_pack(
     runner.load()
 
     outputs: list[dict[str, object]] = []
+    review_playlist_entries: list[str] = ["#EXTM3U"]
     for voice in voices:
-        voice_dir = run_dir / voice
+        voice_dir = structured_dir / voice.lower()
         voice_dir.mkdir(parents=True, exist_ok=True)
         logger.emit(
             "pack_voice_started",
@@ -51,8 +57,10 @@ def run_native_customvoice_pack(
             voice_dir=str(voice_dir),
         )
         for prompt_case in DEFAULT_PROMPT_PACK:
-            filename = f"{prompt_case.slug}.wav"
-            output_path = voice_dir / filename
+            category_dir = voice_dir / prompt_case.category
+            category_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"{prompt_case.index:02d}_{prompt_case.slug}.wav"
+            output_path = category_dir / filename
             started = time.perf_counter()
             runner.synthesize(
                 text=prompt_case.text,
@@ -61,11 +69,16 @@ def run_native_customvoice_pack(
                 language=language,
                 instruct=instruct,
             )
+            review_filename = f"{prompt_case.index:02d}_{voice.lower()}_{prompt_case.category}_{prompt_case.slug}.wav"
+            review_path = review_dir / review_filename
+            shutil.copy2(output_path, review_path)
+            review_playlist_entries.append(review_filename)
             outputs.append(
                 {
                     "voice": voice,
                     "prompt": asdict(prompt_case),
                     "output_path": str(output_path),
+                    "review_path": str(review_path),
                     "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
                 }
             )
@@ -76,6 +89,7 @@ def run_native_customvoice_pack(
             generated_files=len(DEFAULT_PROMPT_PACK),
         )
 
+    playlist_path.write_text("\n".join(review_playlist_entries) + "\n", encoding="utf-8")
     manifest = {
         "generated_at": datetime.now(UTC).isoformat(),
         "command": "native-customvoice-pack",
@@ -84,6 +98,9 @@ def run_native_customvoice_pack(
         "instruct": config.instruct if instruct is None else instruct,
         "voices": voices,
         "prompt_pack": prompt_pack_manifest(),
+        "structured_dir": str(structured_dir),
+        "review_dir": str(review_dir),
+        "playlist_path": str(playlist_path),
         "outputs": outputs,
         "elapsed_ms": round((time.perf_counter() - run_started) * 1000, 2),
     }
