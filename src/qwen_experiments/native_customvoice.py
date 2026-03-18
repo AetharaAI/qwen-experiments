@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import time
 from pathlib import Path
 
@@ -17,6 +18,19 @@ class NativeCustomVoiceRunner:
 
     def load(self) -> None:
         load_started = time.perf_counter()
+        requested_attn = self.config.attn_implementation
+        resolved_attn = requested_attn
+        if requested_attn == "flash_attention_2" and importlib.util.find_spec("flash_attn") is None:
+            resolved_attn = "sdpa"
+            self.logger.emit(
+                "attn_implementation_fallback",
+                runner="native",
+                model_id=self.config.model_id,
+                requested_attn_implementation=requested_attn,
+                resolved_attn_implementation=resolved_attn,
+                reason="flash_attn_not_installed",
+            )
+
         self.logger.emit(
             "model_load_started",
             runner="native",
@@ -24,7 +38,7 @@ class NativeCustomVoiceRunner:
             model_path=self.config.model_path,
             device=self.config.device,
             dtype=self.config.dtype,
-            attn_implementation=self.config.attn_implementation,
+            attn_implementation=resolved_attn,
         )
         try:
             import torch
@@ -38,7 +52,7 @@ class NativeCustomVoiceRunner:
                 model_source,
                 device_map=self.config.device,
                 dtype=torch_dtype,
-                attn_implementation=self.config.attn_implementation,
+                attn_implementation=resolved_attn,
             )
         except Exception as exc:
             self.logger.emit(
@@ -53,6 +67,7 @@ class NativeCustomVoiceRunner:
             "model_load_completed",
             runner="native",
             model_id=self.config.model_id,
+            attn_implementation=resolved_attn,
             elapsed_ms=round((time.perf_counter() - load_started) * 1000, 2),
         )
 
