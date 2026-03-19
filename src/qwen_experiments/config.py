@@ -25,6 +25,7 @@ class ExperimentConfig:
     provider_port: int
     provider_public_base_url: str
     provider_model_alias: str
+    provider_streaming_model_alias: str
     provider_default_language: str
     provider_default_response_format: str
     provider_timeout_seconds: float
@@ -66,7 +67,7 @@ class ExperimentConfig:
                 voice.strip()
                 for voice in os.getenv(
                     "QWEN_EXPERIMENT_DEFAULT_VOICES",
-                    "Ryan,Aiden,Uncle_Fu,Serena,Vivian,Sohee",
+                    "Ryan,Aiden,Serena,Vivian,Uncle_Fu,Sohee,Dylan,Eric,Ono_Anna",
                 ).split(",")
                 if voice.strip()
             ],
@@ -74,6 +75,7 @@ class ExperimentConfig:
             provider_port=int(os.getenv("QWEN_PROVIDER_PORT", "8072")),
             provider_public_base_url=os.getenv("QWEN_PROVIDER_PUBLIC_BASE_URL", "http://qwen-provider:8072"),
             provider_model_alias=os.getenv("QWEN_PROVIDER_MODEL_ALIAS", "qwen_customvoice"),
+            provider_streaming_model_alias=os.getenv("QWEN_PROVIDER_STREAMING_MODEL_ALIAS", "qwen_customvoice_streaming"),
             provider_default_language=os.getenv("QWEN_PROVIDER_DEFAULT_LANGUAGE", "English"),
             provider_default_response_format=os.getenv("QWEN_PROVIDER_DEFAULT_RESPONSE_FORMAT", "wav"),
             provider_timeout_seconds=float(os.getenv("QWEN_PROVIDER_TIMEOUT_SECONDS", "180")),

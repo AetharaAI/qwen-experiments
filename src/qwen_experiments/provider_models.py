@@ -39,6 +39,34 @@ class ProviderSpeechResponse(BaseModel):
     artifacts: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProviderStreamStartRequest(BaseModel):
+    session_id: str
+    model: str
+    voice: str
+    sample_rate: int = 24000
+    format: Literal["wav"] = "wav"
+    context_mode: str = "conversation"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProviderTextChunkRequest(BaseModel):
+    text: str
+
+
+class ProviderTextEventsResponse(BaseModel):
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ProviderStreamEndResponse(BaseModel):
+    model: str
+    format: Literal["wav"] = "wav"
+    duration_ms: int
+    sample_rate: int
+    audio_b64: str
+    timings: dict[str, int] = Field(default_factory=dict)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
+
+
 class ProviderWarmupResponse(BaseModel):
     status: str
     model: str
