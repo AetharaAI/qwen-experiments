@@ -21,11 +21,17 @@ class ExperimentConfig:
     output_dir: Path
     log_dir: Path
     default_voices: list[str]
+    voice_design_model_id: str
+    voice_design_model_path: str
+    voice_design_device: str
+    voice_design_dtype: str
+    voice_design_attn_implementation: str
     provider_host: str
     provider_port: int
     provider_public_base_url: str
     provider_model_alias: str
     provider_streaming_model_alias: str
+    provider_voice_design_model_alias: str
     provider_default_language: str
     provider_default_response_format: str
     provider_timeout_seconds: float
@@ -71,11 +77,23 @@ class ExperimentConfig:
                 ).split(",")
                 if voice.strip()
             ],
+            voice_design_model_id=os.getenv("QWEN_VOICE_DESIGN_MODEL_ID", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
+            voice_design_model_path=os.getenv(
+                "QWEN_VOICE_DESIGN_MODEL_PATH",
+                "/mnt/aetherpro/models/voice/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+            ),
+            voice_design_device=os.getenv("QWEN_VOICE_DESIGN_DEVICE", "cuda:1"),
+            voice_design_dtype=os.getenv("QWEN_VOICE_DESIGN_DTYPE", "bfloat16"),
+            voice_design_attn_implementation=os.getenv(
+                "QWEN_VOICE_DESIGN_ATTN_IMPLEMENTATION",
+                os.getenv("QWEN_EXPERIMENT_ATTN_IMPLEMENTATION", "flash_attention_2"),
+            ),
             provider_host=os.getenv("QWEN_PROVIDER_HOST", "0.0.0.0"),
             provider_port=int(os.getenv("QWEN_PROVIDER_PORT", "8072")),
             provider_public_base_url=os.getenv("QWEN_PROVIDER_PUBLIC_BASE_URL", "http://qwen-provider:8072"),
             provider_model_alias=os.getenv("QWEN_PROVIDER_MODEL_ALIAS", "qwen_customvoice"),
             provider_streaming_model_alias=os.getenv("QWEN_PROVIDER_STREAMING_MODEL_ALIAS", "qwen_customvoice_streaming"),
+            provider_voice_design_model_alias=os.getenv("QWEN_PROVIDER_VOICE_DESIGN_MODEL_ALIAS", "qwen_voice_design"),
             provider_default_language=os.getenv("QWEN_PROVIDER_DEFAULT_LANGUAGE", "English"),
             provider_default_response_format=os.getenv("QWEN_PROVIDER_DEFAULT_RESPONSE_FORMAT", "wav"),
             provider_timeout_seconds=float(os.getenv("QWEN_PROVIDER_TIMEOUT_SECONDS", "180")),

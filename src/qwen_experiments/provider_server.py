@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException
 from .config import ExperimentConfig
 from .event_log import EventLogger
 from .native_customvoice import NativeCustomVoiceRunner
+from .native_voice_design import NativeVoiceDesignRunner
 from .provider_models import (
     ProviderModelInfo,
     ProviderSpeechRequest,
@@ -54,20 +55,31 @@ class ProviderRuntime:
     def __init__(self, config: ExperimentConfig) -> None:
         self.config = config
         self.event_logger = EventLogger(config.log_dir / "qwen-provider.jsonl")
-        self.runner = NativeCustomVoiceRunner(config, self.event_logger)
-        self.load_lock = asyncio.Lock()
+        self.customvoice_runner = NativeCustomVoiceRunner(config, self.event_logger)
+        self.voice_design_runner = NativeVoiceDesignRunner(config, self.event_logger)
+        self.load_locks = {
+            "customvoice": asyncio.Lock(),
+            "voice_design": asyncio.Lock(),
+        }
         self.generate_lock = asyncio.Lock()
-        self.loaded = False
+        self.loaded_models: set[str] = set()
         self.sessions: dict[str, ProviderStreamState] = {}
 
-    async def ensure_loaded(self) -> None:
-        if self.loaded:
+    def _runner_key(self, model_alias: str | None) -> str:
+        if model_alias == self.config.provider_voice_design_model_alias:
+            return "voice_design"
+        return "customvoice"
+
+    async def ensure_loaded(self, model_alias: str | None = None) -> None:
+        runner_key = self._runner_key(model_alias)
+        if runner_key in self.loaded_models:
             return
-        async with self.load_lock:
-            if self.loaded:
+        async with self.load_locks[runner_key]:
+            if runner_key in self.loaded_models:
                 return
-            await asyncio.to_thread(self.runner.load)
-            self.loaded = True
+            runner = self.voice_design_runner if runner_key == "voice_design" else self.customvoice_runner
+            await asyncio.to_thread(runner.load)
+            self.loaded_models.add(runner_key)
 
     def model_info(self) -> ProviderModelInfo:
         return ProviderModelInfo(
@@ -83,6 +95,15 @@ class ProviderRuntime:
             default_voice=self.config.speaker,
             supports_batch=False,
             supports_streaming=True,
+        )
+
+    def voice_design_model_info(self) -> ProviderModelInfo:
+        return ProviderModelInfo(
+            id=self.config.provider_voice_design_model_alias,
+            label=f"{self.config.provider_voice_design_model_alias} ({self.config.voice_design_model_id})",
+            default_voice="prompt_driven",
+            supports_batch=True,
+            supports_streaming=False,
         )
 
     def voice_info(self) -> list[ProviderVoiceInfo]:
@@ -142,30 +163,33 @@ class ProviderRuntime:
                 return generation_prompt.strip()
         return None
 
-    async def warmup(self) -> ProviderWarmupResponse:
+    async def warmup(self, model: str | None = None) -> ProviderWarmupResponse:
         started = time.perf_counter()
-        await self.ensure_loaded()
+        resolved_model = model or self.config.provider_model_alias
+        await self.ensure_loaded(resolved_model)
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         self.event_logger.emit(
             "provider_warmup_completed",
-            model=self.config.provider_model_alias,
+            model=resolved_model,
             elapsed_ms=elapsed_ms,
         )
         return ProviderWarmupResponse(
             status="ready",
-            model=self.config.provider_model_alias,
+            model=resolved_model,
             ready=True,
             elapsed_ms=elapsed_ms,
         )
 
     async def synthesize(self, payload: ProviderSpeechRequest) -> ProviderSpeechResponse:
+        if payload.model == self.config.provider_voice_design_model_alias:
+            return await self._synthesize_voice_design(payload)
         if payload.model != self.config.provider_model_alias:
             raise HTTPException(status_code=400, detail=f"Unsupported model '{payload.model}'.")
-        await self.ensure_loaded()
+        await self.ensure_loaded(payload.model)
         async with self.generate_lock:
             started = time.perf_counter()
             audio_bytes, sample_rate, inference_ms = await asyncio.to_thread(
-                self.runner.synthesize_to_bytes,
+                self.customvoice_runner.synthesize_to_bytes,
                 text=payload.input,
                 speaker=payload.voice,
                 language=payload.language or self.config.provider_default_language,
@@ -191,10 +215,43 @@ class ProviderRuntime:
             },
         )
 
+    async def _synthesize_voice_design(self, payload: ProviderSpeechRequest) -> ProviderSpeechResponse:
+        await self.ensure_loaded(payload.model)
+        instructions = (payload.instructions or "").strip()
+        if not instructions:
+            raise HTTPException(status_code=400, detail="VoiceDesign requests require a non-empty instruction prompt.")
+        async with self.generate_lock:
+            started = time.perf_counter()
+            audio_bytes, sample_rate, inference_ms = await asyncio.to_thread(
+                self.voice_design_runner.synthesize_to_bytes,
+                text=payload.input,
+                language=payload.language or self.config.provider_default_language,
+                instruct=instructions,
+            )
+            total_ms = round((time.perf_counter() - started) * 1000, 2)
+        return ProviderSpeechResponse(
+            model=self.config.provider_voice_design_model_alias,
+            format=payload.response_format,
+            sample_rate=sample_rate,
+            audio_b64=base64.b64encode(audio_bytes).decode("ascii"),
+            timings={
+                "inference_ms": int(inference_ms),
+                "total_ms": int(total_ms),
+            },
+            artifacts={
+                "runtime_path_used": self.config.provider_voice_design_model_alias,
+                "qwen_model_id": self.config.voice_design_model_id,
+                "qwen_language": payload.language or self.config.provider_default_language,
+                "qwen_instructions": instructions,
+                "provider_public_base_url": self.config.provider_public_base_url,
+                "supports_streaming_contract": False,
+            },
+        )
+
     async def start_stream(self, payload: ProviderStreamStartRequest) -> dict[str, Any]:
         if payload.model != self.config.provider_streaming_model_alias:
             raise HTTPException(status_code=400, detail=f"Unsupported streaming model '{payload.model}'.")
-        await self.ensure_loaded()
+        await self.ensure_loaded(payload.model)
         self.sessions[payload.session_id] = ProviderStreamState(
             session_id=payload.session_id,
             model=payload.model,
@@ -232,7 +289,7 @@ class ProviderRuntime:
             async with self.generate_lock:
                 started = time.perf_counter()
                 audio_bytes, sample_rate, inference_ms = await asyncio.to_thread(
-                    self.runner.synthesize_to_bytes,
+                    self.customvoice_runner.synthesize_to_bytes,
                     text=sentence,
                     speaker=state.voice,
                     language=self.config.provider_default_language,
@@ -341,14 +398,20 @@ async def health() -> dict:
         "status": "ok",
         "service": "qwen-provider",
         "model": runtime.config.provider_model_alias,
-        "ready": runtime.loaded,
+        "ready": "customvoice" in runtime.loaded_models,
     }
 
 
 @app.get("/v1/models")
 async def models() -> dict:
     runtime: ProviderRuntime = app.state.runtime
-    return {"models": [runtime.model_info().model_dump(), runtime.streaming_model_info().model_dump()]}
+    return {
+        "models": [
+            runtime.model_info().model_dump(),
+            runtime.streaming_model_info().model_dump(),
+            runtime.voice_design_model_info().model_dump(),
+        ]
+    }
 
 
 @app.get("/v1/voices")
@@ -358,9 +421,14 @@ async def voices() -> dict:
 
 
 @app.post("/v1/warmup")
-async def warmup() -> dict:
+async def warmup(payload: dict | None = None) -> dict:
     runtime: ProviderRuntime = app.state.runtime
-    return (await runtime.warmup()).model_dump()
+    requested_model = None
+    if isinstance(payload, dict):
+        model_value = payload.get("model")
+        if isinstance(model_value, str) and model_value.strip():
+            requested_model = model_value.strip()
+    return (await runtime.warmup(requested_model)).model_dump()
 
 
 @app.post("/v1/audio/speech")
